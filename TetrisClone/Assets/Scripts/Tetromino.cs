@@ -31,17 +31,31 @@ public class Tetromino : MonoBehaviour
 
 	private AudioSource audioSource;
 
-	private void Start()
+
+	//Variables to touch input
+
+	private int touchSensitivityHorizontal = 8;
+	private int touchSensitivityVertical = 4;
+
+	Vector2 previousUnitPosition = Vector2.zero;
+	Vector2 direction = Vector2.zero;
+
+	bool moved = false;
+
+	void Start()
 	{
 		audioSource = GetComponent<AudioSource>();
-
-		fallSpeed = GameObject.Find("GameScript").GetComponent<Game>().fallSpeed;
 	}
 
-	private void Update()
+	void Update()
 	{
-		CheckUserInput();
-		UpdateIndividualScore();
+		if (!Game.isPaused)
+		{
+
+			CheckUserInput();
+			UpdateIndividualScore();
+			UpdateFallSpeed();
+		}
 	}
 
 	void UpdateIndividualScore()
@@ -58,7 +72,10 @@ public class Tetromino : MonoBehaviour
 		}
 	}
 
-
+	void UpdateFallSpeed()
+	{
+		fallSpeed = Game.fallSpeed;
+	}
 	void MoveLeft()
 	{
 		if (movedInmediateHorizontal)
@@ -168,6 +185,7 @@ public class Tetromino : MonoBehaviour
 			Game.currentScore += individualScore;
 
 			enabled = false;
+			tag = "Untagged";
 
 		}
 		fall = Time.time;
@@ -237,6 +255,58 @@ public class Tetromino : MonoBehaviour
 	}
 	void CheckUserInput()
 	{
+#if UNITY_ANDROID
+		if (Input.touchCount > 0)
+		{
+			Touch t = Input.GetTouch(0);
+
+			if (t.phase == TouchPhase.Began)
+			{
+				previousUnitPosition = new Vector2(t.position.x,t.position.y);
+			}
+			else if (t.phase == TouchPhase.Moved)
+			{
+				Vector2 touchDeltaPosition = t.deltaPosition;
+				direction = touchDeltaPosition.normalized;
+				if (Mathf.Abs(t.position.x - previousUnitPosition.x) >= touchSensitivityHorizontal && (direction.x < 0) && t.deltaPosition.y > -10 && t.deltaPosition.y < 10)
+				{
+					//MoveLeft
+					MoveLeft();
+					previousUnitPosition = t.position;
+					moved = true;
+				}
+				else if (Mathf.Abs(t.position.x-previousUnitPosition.x)>=touchSensitivityHorizontal &&(direction.x > 0)&&t.deltaPosition.y>-10 && t.deltaPosition.y<10)
+				{
+					//MoveRight
+					MoveRight();
+					previousUnitPosition = t.position;
+					moved = true;
+
+
+				}
+				else if (Mathf.Abs(t.position.y-previousUnitPosition.y)>=touchSensitivityVertical && (direction.y<0) && t.deltaPosition.x>-10 &&t.deltaPosition.x<10)
+				{
+					//MoveDown
+					MoveDown();
+					previousUnitPosition = t.position;
+					moved = true;				
+				}
+			}
+			else if (t.phase == TouchPhase.Ended)
+			{
+				if (!moved && t.position.x>Screen.width/4)
+				{
+					Rotate();
+				}
+				moved = false;
+			}
+		}
+
+		if (Time.time-fall>=fallSpeed)
+		{
+			MoveDown();
+		}
+#else
 		if (Input.GetKeyUp(KeyCode.RightArrow) || Input.GetKeyUp(KeyCode.LeftArrow))
 		{
 			movedInmediateHorizontal = false;
@@ -248,7 +318,7 @@ public class Tetromino : MonoBehaviour
 		{
 			MoveLeft();
 		}
-		if (Input.GetKey(KeyCode.DownArrow))
+		if (Input.GetKeyUp(KeyCode.DownArrow))
 		{
 			movedInmediateVertical = false;
 			verticalTimer = 0;
@@ -268,6 +338,24 @@ public class Tetromino : MonoBehaviour
 		if (Input.GetKey(KeyCode.DownArrow) || (Time.time - fall >= fallSpeed))
 		{
 			MoveDown();
+		}
+		if (Input.GetKeyUp(KeyCode.Space))
+		{
+			SlamDown();
+		}
+#endif
+	}
+
+	public void SlamDown()
+	{
+		while (CheckIsValidPosition())
+		{
+			transform.position += new Vector3(0,-1,0);
+		}
+		if (!CheckIsValidPosition())
+		{
+			transform.position += new Vector3(0,1,0);
+			FindObjectOfType<Game>().UpdateGrid(this);
 		}
 	}
 	bool CheckIsValidPosition()

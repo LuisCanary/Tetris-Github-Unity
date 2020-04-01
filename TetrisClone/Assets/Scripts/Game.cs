@@ -10,17 +10,22 @@ public class Game : MonoBehaviour
 
 	public static Transform[,] grid = new Transform[gridWidth, gridHeight];
 
+	public static bool startingAtLevelZero;
+	public static int startingLevel;
+
 	public int scoreOneLine = 40;
 	public int scoreTwoLine = 100;
 	public int scoreThreeLine = 300;
 	public int scoreFourLine = 1200;
 
-	public float fallSpeed = 1.0f;
+	public static float fallSpeed = 1.0f;
 
 	public int currentLevel = 0;
 	private int numLinesCleared = 0;
 
 	public Text scoreText;
+	public Text levelText;
+	public Text linesText;
 
 	public AudioClip clearedLineSound;
 	private AudioSource audioSource;
@@ -28,18 +33,49 @@ public class Game : MonoBehaviour
 	private int numberOfRowsThisTurn = 0;
     public static int currentScore=0;
 
+	private int startingHighScore;
+	private int startingHighScore2;
+	private int startingHighScore3;
+
 	private GameObject previewTetromino;
 	private GameObject nextTetromino;
+	private GameObject savedTetromino;
+	private GameObject ghostTetromino;
 
 	private bool gameStarted = false;
 
-	private Vector2 previewTetrominoPosition = new Vector2(-6.5f,16);
+	public static bool isPaused = false;
 
-    void Start()
+	private Vector2 previewTetrominoPosition = new Vector2(-6.5f,16);
+	private Vector2 savedTetrominoPosition = new Vector2(-6.5f, 10);
+
+	public Canvas hud_Canvas;
+	public Canvas pause_Canvas;
+
+	public int maxSwaps = 2;
+	private int currentSwaps = 0;
+
+	void Start()
     {
-		audioSource = GetComponent<AudioSource>();
+		currentScore = 0;
+
+		scoreText.text = "0";
+		
+		currentLevel = startingLevel;
+
+		levelText.text = currentLevel.ToString();
+
+		linesText.text = "0";
+
 		SpawnNextTetromino();
-    }
+
+		audioSource = GetComponent<AudioSource>();
+		startingHighScore = PlayerPrefs.GetInt("highScore");
+		startingHighScore2 = PlayerPrefs.GetInt("highScore2");
+		startingHighScore3 = PlayerPrefs.GetInt("highScore3");
+
+
+	}
 
 	void Update()
 	{
@@ -47,21 +83,103 @@ public class Game : MonoBehaviour
 		UpdateUI();
 		UpdateLevel();
 		UpdateSpeed();
+
+		CheckUserInput();
 	}
+
+	void CheckUserInput()
+	{
+		if (Input.GetKeyUp(KeyCode.P))
+		{
+			if (Time.timeScale==1)
+			{
+				PauseGame();
+				
+			}
+			else
+			{
+				ResumeGame();
+				
+			}
+		}
+		if (Input.GetKeyUp(KeyCode.LeftShift ) || (Input.GetKeyUp(KeyCode.RightShift)))
+		{
+			GameObject tempNextTetromino = GameObject.FindGameObjectWithTag("CurrentActiveTetromino");
+			SaveTetromino(tempNextTetromino.transform);
+		}
+	}
+	void PauseGame()
+	{
+		Time.timeScale = 0;
+		isPaused = true;
+		audioSource.Pause();
+		hud_Canvas.enabled = false;
+		pause_Canvas.enabled = true;
+	}
+	void ResumeGame()
+	{
+		Time.timeScale = 1;
+		isPaused = false;
+		audioSource.Play();
+		hud_Canvas.enabled = true;
+		pause_Canvas.enabled = false;
+	}
+
+	public void QuitGame()
+	{
+		Application.Quit();
+	}
+
+	public void UpdateHighScore()
+	{
+		if (currentScore > startingHighScore)
+		{
+			PlayerPrefs.SetInt("highScore3",startingHighScore2);
+			PlayerPrefs.SetInt("highScore2", startingHighScore);
+			PlayerPrefs.SetInt("highScore", currentScore);
+		}
+		else if(currentScore > startingHighScore2)
+		{
+			PlayerPrefs.SetInt("highScore3", startingHighScore2);
+			PlayerPrefs.SetInt("highScore2", currentScore);
+		}
+		else if (currentScore > startingHighScore3)
+		{
+			PlayerPrefs.SetInt("highScore3", currentScore);
+		}
+
+		PlayerPrefs.SetInt("lastScore", currentScore);
+	}
+
+
+	public void SpawnGhostTetromino()
+	{
+		if (GameObject.FindGameObjectsWithTag("CurrentGhostTetromino")!=null)
+		{
+			Destroy(GameObject.FindGameObjectWithTag("CurrentGhostTetromino"));
+		}
+
+		ghostTetromino = (GameObject)Instantiate(nextTetromino, nextTetromino.transform.position,Quaternion.identity);
+
+		Destroy(ghostTetromino.GetComponent<Tetromino>());
+		ghostTetromino.AddComponent<GhostTetromino>();
+	}
+
 	void UpdateLevel()
 	{
-		currentLevel = numLinesCleared / 10;
-		Debug.Log("CurrentLevel: "+currentLevel);
+		if ((startingAtLevelZero==true) || startingAtLevelZero==false && (numLinesCleared /10 > startingLevel))
+			currentLevel = numLinesCleared / 10;
 	}
 	void UpdateSpeed()
 	{
-		fallSpeed = 1.0f - ((float)currentLevel * 0.01f);
-		Debug.Log("CurrentFallSpeed: " + fallSpeed);
+		fallSpeed = 1.0f - ((float)currentLevel * 0.1f);
 	}
 
 	public void UpdateUI()
 	{
 		scoreText.text = currentScore.ToString();
+		levelText.text = currentLevel.ToString();
+		linesText.text = numLinesCleared.ToString();
 	}
 
 	public void PlayLineClearedSound()
@@ -91,34 +209,51 @@ public class Game : MonoBehaviour
 			}
 
 			numberOfRowsThisTurn = 0;
+
 			PlayLineClearedSound();
 		}
 	}
 
 	public void ClearedOneLine()
 	{
-		currentScore += scoreOneLine;
+		currentScore += scoreOneLine + (currentLevel * 20);
 		numLinesCleared++;
 	}
 	public void ClearedTwoLines()
 	{
-		currentScore += scoreTwoLine;
+		currentScore += scoreTwoLine + (currentLevel * 25);
 		numLinesCleared += 2;
 	}
 
 	public void ClearedThreeLines()
 	{
-		currentScore += scoreThreeLine;
+		currentScore += scoreThreeLine + (currentLevel * 30);
 		numLinesCleared += 3;
 	}
 
 	public void ClearedFourLines()
 	{
-		currentScore += scoreFourLine;
+		currentScore += scoreFourLine + (currentLevel * 35);
 		numLinesCleared += 4;
 	}
 
+	bool CheckIsValidPosition(GameObject tetromino)
+	{
+		foreach (Transform mino in tetromino.transform)
+		{
+			Vector2 pos = Round(mino.position);
 
+			if (!CheckIsInsideGrid(pos))
+			{
+				return false;
+			}
+			if (GetTransformAtGridPosition(pos)!=null && GetTransformAtGridPosition(pos).parent!= tetromino.transform)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 
 	public bool CheckIsAboveGrid(Tetromino tetromino)
 	{
@@ -155,7 +290,7 @@ public class Game : MonoBehaviour
 
 	public void DeleteMinoAt(int y)
 	{
-		for (int x = 0; x < gridWidth; x++)
+		for (int x = 0; x < gridWidth; ++x)
 		{
 			Destroy(grid[x, y].gameObject);
 
@@ -165,7 +300,7 @@ public class Game : MonoBehaviour
 
 	public void MoveRowDown(int y)
 	{
-		for (int x = 0; x < gridWidth; x++)
+		for (int x = 0; x < gridWidth; ++x)
 		{
 			if (grid[x,y]!=null)
 			{
@@ -180,7 +315,7 @@ public class Game : MonoBehaviour
 
 	public void MoveAllRowsDown(int y)
 	{
-		for (int i = 0; i < gridHeight; i++)
+		for (int i = y; i < gridHeight; ++i)
 		{
 			MoveRowDown(i);
 		}
@@ -188,7 +323,7 @@ public class Game : MonoBehaviour
 
 	public void DeleteRow()
 	{
-		for (int y = 0; y < gridHeight; y++)
+		for (int y = 0; y < gridHeight; ++y)
 		{
 			if (IsFullRowAt(y))
 			{
@@ -196,7 +331,7 @@ public class Game : MonoBehaviour
 
 				MoveAllRowsDown(y + 1);
 
-				y--;
+				--y;
 			}
 		}
 	}
@@ -247,15 +382,70 @@ public class Game : MonoBehaviour
 			nextTetromino = (GameObject)Instantiate(Resources.Load(GetRandomTetromino(), typeof(GameObject)), new Vector2(5f, 20f), Quaternion.identity);
 			previewTetromino = (GameObject)Instantiate(Resources.Load(GetRandomTetromino(), typeof(GameObject)), previewTetrominoPosition, Quaternion.identity);
 			previewTetromino.GetComponent<Tetromino>().enabled = false;
+			nextTetromino.tag = "CurrentActiveTetromino";
+
+			SpawnGhostTetromino();
 		}
 		else
 		{
 			previewTetromino.transform.localPosition = new Vector2(5.0f, 20.0f);
 			nextTetromino = previewTetromino;
 			nextTetromino.GetComponent<Tetromino>().enabled = true;
-
+			nextTetromino.tag = "CurrentActiveTetromino";
 			previewTetromino = (GameObject)Instantiate(Resources.Load(GetRandomTetromino(), typeof(GameObject)), previewTetrominoPosition, Quaternion.identity);
 			previewTetromino.GetComponent<Tetromino>().enabled = false;
+
+			SpawnGhostTetromino();
+		}
+
+		currentSwaps = 0;
+	}
+
+	public void SaveTetromino(Transform t)
+	{
+		currentSwaps++;
+		if (currentSwaps>maxSwaps)
+		{
+			return;
+		}
+
+		if (savedTetromino!=null)
+		{
+			GameObject tempSavedTetromino = GameObject.FindGameObjectWithTag("CurrentSavedTetromino");
+			tempSavedTetromino.transform.localPosition = new Vector2(gridWidth / 2, gridHeight);
+
+			if (!CheckIsValidPosition(tempSavedTetromino))
+			{
+				tempSavedTetromino.transform.localPosition = savedTetrominoPosition;
+
+				return;
+			}
+
+			savedTetromino = (GameObject)Instantiate(t.gameObject);
+			savedTetromino.GetComponent<Tetromino>().enabled = false;
+			savedTetromino.transform.localPosition = savedTetrominoPosition;
+			savedTetromino.tag = "CurrentSavedTetromino";
+
+			nextTetromino = (GameObject)Instantiate(tempSavedTetromino);
+			nextTetromino.GetComponent<Tetromino>().enabled = true;
+			nextTetromino.transform.localPosition = new Vector2(gridWidth / 2, gridHeight);
+			nextTetromino.tag = "CurrentActiveTetromino";
+
+			Destroy(t.gameObject);
+			Destroy(tempSavedTetromino);
+
+			SpawnGhostTetromino();
+		}
+		else
+		{
+			savedTetromino = (GameObject)Instantiate(GameObject.FindGameObjectWithTag("CurrentActiveTetromino"));
+			savedTetromino.GetComponent<Tetromino>().enabled = false;
+			savedTetromino.transform.localPosition = savedTetrominoPosition;
+			savedTetromino.tag = "CurrentSavedTetromino";
+
+			Destroy(GameObject.FindGameObjectWithTag("CurrentActiveTetromino"));
+
+			SpawnNextTetromino();
 		}
 	}
 
@@ -305,6 +495,7 @@ public class Game : MonoBehaviour
 
 	public void GameOver()
 	{
+		UpdateHighScore();
 		Application.LoadLevel("GameOver");
 	}
 
